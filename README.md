@@ -1,4 +1,4 @@
-# ttybr
+# kbrd
 
 A terminal-based typing tutor inspired by [Keybr](https://www.keybr.com/), built with Rust and Ratatui.
 

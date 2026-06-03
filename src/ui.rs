@@ -37,7 +37,7 @@ fn render_header(frame: &mut Frame, area: Rect) {
         .style(Style::new().bg(BG));
 
     let title = Line::from(vec![
-        Span::styled("ttybr", Style::new().fg(ACCENT).bold()),
+        Span::styled("kbrd", Style::new().fg(ACCENT).bold()),
         Span::styled(" — typing tutor", Style::new().fg(SUBTEXT)),
     ])
     .centered();
