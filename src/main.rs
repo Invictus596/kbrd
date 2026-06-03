@@ -2,7 +2,6 @@ mod app;
 mod ui;
 
 use color_eyre::eyre::Result;
-use std::io::stdout;
 
 fn main() -> Result<()> {
     color_eyre::install()?;

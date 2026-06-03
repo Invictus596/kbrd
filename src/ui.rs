@@ -7,7 +7,6 @@ use ratatui::{
 };
 
 const BG: Color = Color::Rgb(30, 30, 46);
-const SURFACE: Color = Color::Rgb(37, 37, 53);
 const ACCENT: Color = Color::Rgb(122, 162, 247);
 const TEXT: Color = Color::Rgb(192, 194, 245);
 const SUBTEXT: Color = Color::Rgb(147, 150, 196);
