@@ -22,12 +22,16 @@ Features an adaptive algorithm that targets your weakest keystrokes, all wrapped
 - **Low-latency** — built for linear mechanical switches; sub-16ms frame budget
 - **Aesthetic TUI** — deep cool-gray palette with soft blue accents, rounded borders, true color support
 
-### Phase 1 (current)
+### Phase 2 (current)
 
 - [x] Project scaffold with Ratatui + Crossterm
 - [x] Three-zone layout: Header / Typing Arena / Footer
 - [x] Graceful exit via `Ctrl+C` or `Esc`
 - [x] Static placeholder text: "The quick brown fox jumps over the lazy dog."
+- [x] Character-level event capture & per-key timing
+- [x] Per-key accuracy tracking and heatmap
+- [x] Results screen with WPM, accuracy, per-key breakdown
+- [x] Sentence pool with random selection on restart
 
 ## Getting started
 
@@ -42,9 +46,9 @@ Requires a terminal with true color (24-bit) support. Most modern terminal emula
 | Phase | Focus |
 |-------|-------|
 | 1 | Project skeleton & TUI layout |
-| 2 | Character-level event capture & per-key timing |
+| 2 | Character-level event capture & per-key timing ✓ |
 | 3 | Adaptive algorithm (Markov chains, error weighting) |
-| 4 | Keyboard heatmap rendering |
+| 4 | Keyboard heatmap rendering ✓ (basic) |
 | 5 | Session stats, progress graphs, word/sentence modes |
 
 ## Tech stack
