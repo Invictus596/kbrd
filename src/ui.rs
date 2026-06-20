@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use ratatui::{
     layout::{Alignment, Constraint, Layout, Rect},
     style::{Color, Style, Stylize},
@@ -54,7 +56,7 @@ fn render_header(frame: &mut Frame, area: Rect, app: &App) {
 
     let elapsed = app
         .session_end
-        .unwrap_or_else(|| Instant::now())
+        .unwrap_or_else(Instant::now)
         .duration_since(app.session_start);
     let secs = elapsed.as_secs_f64();
     let wpm = if secs > 0.0 {
@@ -65,10 +67,7 @@ fn render_header(frame: &mut Frame, area: Rect, app: &App) {
     };
 
     let title = " kbrd — typing tutor ";
-    let stats = format!(
-        " errors: {} | wpm: {:.0} ",
-        app.error_count, wpm,
-    );
+    let stats = format!(" errors: {} | wpm: {:.0} ", app.error_count, wpm,);
     let padding = inner.width.saturating_sub((title.len() + stats.len()) as u16);
     let padding_str = " ".repeat(padding as usize);
 
@@ -89,12 +88,29 @@ fn render_typing_arena(frame: &mut Frame, area: Rect, app: &App) {
 
     let inner = block.inner(area);
 
+    let cursor_visible =
+        (Instant::now().duration_since(app.session_start).as_millis() / 500) % 2 == 0;
+
     let mut spans = Vec::new();
     for (i, ch) in app.text.char_indices() {
         let style = if i == app.cursor {
-            Style::new().bg(CURSOR_BG).fg(CURSOR_FG)
+            if cursor_visible {
+                Style::new().bg(CURSOR_BG).fg(CURSOR_FG)
+            } else {
+                match app.states[i] {
+                    Some(true) => Style::new().fg(DIM_TEXT),
+                    Some(false) => Style::new().fg(ERROR_RED).underlined(),
+                    None => Style::new().fg(TEXT),
+                }
+            }
         } else {
             match app.states[i] {
+                None if i > app.cursor => {
+                    let dist = i - app.cursor;
+                    let t = (1.0 - (dist as f64 / 7.0).min(1.0)).max(0.15);
+                    let v = (80.0 + 140.0 * t) as u8;
+                    Style::new().fg(Color::Rgb(v, v, v + 15))
+                }
                 None => Style::new().fg(TEXT),
                 Some(true) => Style::new().fg(DIM_TEXT),
                 Some(false) => Style::new().fg(ERROR_RED).underlined(),
@@ -104,16 +120,17 @@ fn render_typing_arena(frame: &mut Frame, area: Rect, app: &App) {
     }
 
     let text = Text::from(Line::from(spans));
-    let text_height = text.lines.len() as u16;
     let paragraph = Paragraph::new(text)
         .style(Style::new().bg(BG))
+        .alignment(Alignment::Center)
         .wrap(Wrap { trim: false });
-    let vertical_pad = inner.height.saturating_sub(text_height) / 2;
+
+    let vertical_pad = inner.height.saturating_sub(1) / 2;
     let padded_area = Rect {
         x: inner.x,
         y: inner.y + vertical_pad,
         width: inner.width,
-        height: inner.height.saturating_sub(vertical_pad * 2).max(text_height),
+        height: 1,
     };
 
     frame.render_widget(block, area);
@@ -133,7 +150,7 @@ fn render_results(frame: &mut Frame, area: Rect, app: &App) {
 
     let elapsed = app
         .session_end
-        .unwrap_or_else(|| Instant::now())
+        .unwrap_or_else(Instant::now)
         .duration_since(app.session_start);
     let secs = elapsed.as_secs_f64();
     let total_chars = app.text.len();
@@ -169,10 +186,7 @@ fn render_results(frame: &mut Frame, area: Rect, app: &App) {
         ]),
         Line::from(vec![
             Span::styled("  Time:      ", Style::new().fg(SUBTEXT)),
-            Span::styled(
-                format!("{:.1}s", secs),
-                Style::new().fg(TEXT),
-            ),
+            Span::styled(format!("{:.1}s", secs), Style::new().fg(TEXT)),
         ]),
         Line::from(""),
         Line::from(Span::styled(
@@ -193,10 +207,7 @@ fn render_results(frame: &mut Frame, area: Rect, app: &App) {
             let avg_ms = stat.avg_time().as_secs_f64() * 1000.0;
             let acc = stat.accuracy() * 100.0;
             lines.push(Line::from(vec![
-                Span::styled(
-                    format!("   '{}'", ch),
-                    Style::new().fg(TEXT).bold(),
-                ),
+                Span::styled(format!("   '{}'", ch), Style::new().fg(TEXT).bold()),
                 Span::styled(
                     format!("  acc: {:.0}%", acc),
                     Style::new().fg(if acc > 90.0 {
@@ -207,14 +218,8 @@ fn render_results(frame: &mut Frame, area: Rect, app: &App) {
                         ERROR_RED
                     }),
                 ),
-                Span::styled(
-                    format!("  avg: {:.0}ms", avg_ms),
-                    Style::new().fg(SUBTEXT),
-                ),
-                Span::styled(
-                    format!("  hits: {}", stat.hits),
-                    Style::new().fg(SUBTEXT),
-                ),
+                Span::styled(format!("  avg: {:.0}ms", avg_ms), Style::new().fg(SUBTEXT)),
+                Span::styled(format!("  hits: {}", stat.hits), Style::new().fg(SUBTEXT)),
             ]));
         }
     }
@@ -293,5 +298,3 @@ fn heatmap_color(ch: char, app: &App) -> Color {
         }
     }
 }
-
-use std::time::Instant;
