@@ -4,7 +4,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Layout, Rect},
     style::{Color, Style, Stylize},
     text::{Line, Span, Text},
-    widgets::{Block, BorderType, Paragraph, Wrap},
+    widgets::{Block, BorderType, Gauge, Paragraph, Wrap},
     Frame,
 };
 
@@ -17,6 +17,7 @@ const SUBTEXT: Color = Color::Rgb(147, 150, 196);
 const DIM_TEXT: Color = Color::Rgb(80, 80, 100);
 const ERROR_RED: Color = Color::Rgb(255, 85, 85);
 const CORRECT_GREEN: Color = Color::Rgb(80, 200, 120);
+const WARN_YELLOW: Color = Color::Rgb(255, 200, 80);
 const CURSOR_BG: Color = Color::Rgb(122, 162, 247);
 const CURSOR_FG: Color = Color::Rgb(30, 30, 46);
 
@@ -37,8 +38,8 @@ pub fn render(frame: &mut Frame, app: &App) {
 fn layout(area: Rect) -> [Rect; 3] {
     let chunks = Layout::vertical([
         Constraint::Length(3),
-        Constraint::Min(10),
-        Constraint::Length(10),
+        Constraint::Min(1),
+        Constraint::Length(8),
     ])
     .split(area);
 
@@ -66,14 +67,15 @@ fn render_header(frame: &mut Frame, area: Rect, app: &App) {
         0.0
     };
 
-    let title = " kbrd — typing tutor ";
-    let stats = format!(" errors: {} | wpm: {:.0} ", app.error_count, wpm,);
-    let padding = inner.width.saturating_sub((title.len() + stats.len()) as u16);
-    let padding_str = " ".repeat(padding as usize);
+    let label = " kbrd — typing tutor ";
+    let stats = format!(" errors: {} | wpm: {:.0} ", app.error_count, wpm);
+    let gap = inner
+        .width
+        .saturating_sub((label.len() + stats.len()) as u16);
 
     let line = Line::from(vec![
-        Span::styled(title, Style::new().fg(ACCENT).bold()),
-        Span::raw(padding_str),
+        Span::styled(label, Style::new().fg(ACCENT).bold()),
+        Span::raw(" ".repeat(gap as usize)),
         Span::styled(stats, Style::new().fg(SUBTEXT)),
     ]);
 
@@ -119,22 +121,41 @@ fn render_typing_arena(frame: &mut Frame, area: Rect, app: &App) {
         spans.push(Span::styled(ch.to_string(), style));
     }
 
+    let text_area_height = if inner.height >= 4 { inner.height - 2 } else { inner.height };
+
     let text = Text::from(Line::from(spans));
     let paragraph = Paragraph::new(text)
         .style(Style::new().bg(BG))
         .alignment(Alignment::Center)
         .wrap(Wrap { trim: false });
 
-    let vertical_pad = inner.height.saturating_sub(1) / 2;
+    let text_y = inner.y + text_area_height.saturating_sub(1) / 2;
     let padded_area = Rect {
         x: inner.x,
-        y: inner.y + vertical_pad,
+        y: text_y,
         width: inner.width,
         height: 1,
     };
 
     frame.render_widget(block, area);
     frame.render_widget(paragraph, padded_area);
+
+    if inner.height >= 4 {
+        let progress = app.cursor as f64 / app.text.len() as f64;
+        let gauge_y = inner.y + inner.height - 1;
+        let gauge_area = Rect {
+            x: inner.x + 1,
+            y: gauge_y,
+            width: inner.width.saturating_sub(2),
+            height: 1,
+        };
+        let gauge = Gauge::default()
+            .gauge_style(Style::new().fg(ACCENT).bg(Color::Rgb(40, 40, 60)))
+            .ratio(progress as f64)
+            .label(format!("{}/{}", app.cursor, app.text.len()))
+            .use_unicode(true);
+        frame.render_widget(gauge, gauge_area);
+    }
 }
 
 fn render_results(frame: &mut Frame, area: Rect, app: &App) {
@@ -167,30 +188,27 @@ fn render_results(frame: &mut Frame, area: Rect, app: &App) {
 
     let mut lines = vec![
         Line::from(vec![
-            Span::styled("  WPM:       ", Style::new().fg(SUBTEXT)),
-            Span::styled(format!("{:.0}", wpm), Style::new().fg(ACCENT).bold()),
+            Span::styled("  WPM       ", Style::new().fg(SUBTEXT)),
+            Span::styled(format!("  {:.0}", wpm), Style::new().fg(ACCENT).bold()),
         ]),
         Line::from(vec![
-            Span::styled("  Accuracy:  ", Style::new().fg(SUBTEXT)),
+            Span::styled("  Accuracy  ", Style::new().fg(SUBTEXT)),
             Span::styled(
-                format!("{:.0}%", accuracy),
+                format!("  {:.0}%", accuracy),
                 Style::new().fg(CORRECT_GREEN).bold(),
             ),
         ]),
         Line::from(vec![
-            Span::styled("  Errors:    ", Style::new().fg(SUBTEXT)),
-            Span::styled(
-                format!("{}", app.error_count),
-                Style::new().fg(ERROR_RED).bold(),
-            ),
+            Span::styled("  Errors    ", Style::new().fg(SUBTEXT)),
+            Span::styled(format!("  {}", app.error_count), Style::new().fg(ERROR_RED).bold()),
         ]),
         Line::from(vec![
-            Span::styled("  Time:      ", Style::new().fg(SUBTEXT)),
-            Span::styled(format!("{:.1}s", secs), Style::new().fg(TEXT)),
+            Span::styled("  Time      ", Style::new().fg(SUBTEXT)),
+            Span::styled(format!("  {:.1}s", secs), Style::new().fg(TEXT)),
         ]),
         Line::from(""),
         Line::from(Span::styled(
-            "  Press Enter for next sentence  |  Esc to quit",
+            "  Press Enter for next sentence  \u{2502}  Esc to quit",
             Style::new().fg(DIM_TEXT).italic(),
         )),
     ];
@@ -200,26 +218,24 @@ fn render_results(frame: &mut Frame, area: Rect, app: &App) {
     if !keys.is_empty() {
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
-            "  Per-key breakdown:",
+            "  Per-key breakdown",
             Style::new().fg(SUBTEXT),
         )));
         for (ch, stat) in keys {
             let avg_ms = stat.avg_time().as_secs_f64() * 1000.0;
             let acc = stat.accuracy() * 100.0;
+            let acc_color = if acc > 90.0 {
+                CORRECT_GREEN
+            } else if acc > 70.0 {
+                WARN_YELLOW
+            } else {
+                ERROR_RED
+            };
             lines.push(Line::from(vec![
                 Span::styled(format!("   '{}'", ch), Style::new().fg(TEXT).bold()),
-                Span::styled(
-                    format!("  acc: {:.0}%", acc),
-                    Style::new().fg(if acc > 90.0 {
-                        CORRECT_GREEN
-                    } else if acc > 70.0 {
-                        Color::Rgb(255, 200, 80)
-                    } else {
-                        ERROR_RED
-                    }),
-                ),
-                Span::styled(format!("  avg: {:.0}ms", avg_ms), Style::new().fg(SUBTEXT)),
-                Span::styled(format!("  hits: {}", stat.hits), Style::new().fg(SUBTEXT)),
+                Span::styled(format!("  acc {:.0}%", acc), Style::new().fg(acc_color)),
+                Span::styled(format!("  avg {:.0}ms", avg_ms), Style::new().fg(SUBTEXT)),
+                Span::styled(format!("  {} hits", stat.hits), Style::new().fg(SUBTEXT)),
             ]));
         }
     }
@@ -235,7 +251,7 @@ fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
         .border_type(BorderType::Rounded)
         .border_style(Style::new().fg(ACCENT))
         .style(Style::new().bg(BG))
-        .title(" heatmap ")
+        .title(" keyboard heatmap ")
         .title_style(Style::new().fg(SUBTEXT));
 
     let inner = block.inner(area);
@@ -270,9 +286,10 @@ fn render_keyboard(app: &App) -> Vec<Line<'static>> {
                 let ch = key.to_ascii_lowercase().chars().next().unwrap();
                 let color = heatmap_color(ch, app);
                 spans.push(Span::styled(
-                    format!("[{}] ", key),
-                    Style::new().fg(color).bold(),
+                    format!(" {} ", key),
+                    Style::new().fg(color).bold().bg(Color::Rgb(38, 38, 56)),
                 ));
+                spans.push(Span::raw(" "));
             }
 
             Line::from(spans)
@@ -289,7 +306,7 @@ fn heatmap_color(ch: char, app: &App) -> Color {
             if acc >= 0.95 {
                 CORRECT_GREEN
             } else if acc >= 0.80 {
-                Color::Rgb(255, 200, 80)
+                WARN_YELLOW
             } else if acc >= 0.60 {
                 Color::Rgb(255, 150, 50)
             } else {
